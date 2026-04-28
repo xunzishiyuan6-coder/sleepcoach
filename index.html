@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SleepCoach 🌸</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ffb3c6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SleepCoach" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fff9f5; font-family: 'Nunito', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // ── Storage polyfill (localStorage ベース) ─────────────────────
+    window.storage = {
+      get: async (key, shared = false) => {
+        try {
+          const val = localStorage.getItem(key);
+          return val !== null ? { key, value: val, shared } : null;
+        } catch { return null; }
+      },
+      set: async (key, value, shared = false) => {
+        try {
+          localStorage.setItem(key, String(value));
+          return { key, value, shared };
+        } catch { return null; }
+      },
+      delete: async (key, shared = false) => {
+        try {
+          localStorage.removeItem(key);
+          return { key, deleted: true, shared };
+        } catch { return null; }
+      },
+      list: async (prefix = "", shared = false) => {
+        try {
+          const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+          return { keys, prefix, shared };
+        } catch { return null; }
+      }
+    };
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ── Storage helpers ──────────────────────────────────────────────
+    const recKey     = (u) => `sc-records:${u.toLowerCase()}`;
+    const authKey    = (u) => `sc-auth:${u.toLowerCase()}`;
+    const SESSION_KEY = "sc-session";
+
+    const stGet = async (key, shared=false) => {
+      try {
+        const r = await window.storage.get(key, shared);
+        return r ? r.value : null;
+      } catch { return null; }
+    };
+    const stSet = async (key, val, shared=false) => {
+      try {
+        await window.storage.set(key, String(val), shared);
+        return true;
+      } catch { return false; }
+    };
+
+    const hashPw = async (str) => {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+    };
+
+    // ── Utilities ─────────────────────────────────────────────────────
+    const fmt      = (h,m) => `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    const todayStr = ()    => new Date().toISOString().slice(0,10);
+    const diffH    = (bed,wake) => { const [bh,bm]=bed.split(":").map(Number),[wh,wm]=wake.split(":").map(Number); let d=(wh*60+wm)-(bh*60+bm); if(d<0)d+=1440; return Math.round(d/6)/10; };
+    const diffHM   = (bed,wake) => { const [bh,bm]=bed.split(":").map(Number),[wh,wm]=wake.split(":").map(Number); let d=(wh*60+wm)-(bh*60+bm); if(d<0)d+=1440; return {h:Math.floor(d/60),m:d%60}; };
+    const fmtSleep = ({h,m})   => m===0 ? `${h}時間` : `${h}時間${m}分`;
+
+    const BATH_OPTIONS = [
+      {v:"none",   label:"入らず"},
+      {v:"w30",    label:"〜30分前"},
+      {v:"w1h",    label:"〜1時間前"},
+      {v:"w90",    label:"〜1.5時間前"},
+      {v:"w2h",    label:"〜2時間前"},
+      {v:"w2h30",  label:"〜2.5時間前"},
+      {v:"over3h", label:"3時間以上前"},
+      {v:"morning",label:"朝風呂☀️"},
+    ];
+    const BATH_LABEL = Object.fromEntries(BATH_OPTIONS.map(o=>[o.v,o.label]));
+
+    // ── Design ────────────────────────────────────────────────────────
+    const C = {
+      bg:"#fff9f5", card:"#ffffff",
+      pink:"#ffb3c6", pinkD:"#ff85a1", pinkLight:"#fff0f5",
+      lav:"#d4b8f0",  lavD:"#b896e8",  lavLight:"#f5f0ff",
+      mint:"#a8e6cf", mintD:"#5ecb98",
+      peach:"#ffd6b3", sky:"#b3d9ff",
+      text:"#3d2c35",  sub:"#9b7f8c",  border:"#f0d9e8",
+    };
+    const card  = (ex={}) => ({background:C.card,borderRadius:20,padding:18,border:`1.5px solid ${C.border}`,marginBottom:14,boxShadow:"0 2px 16px #f0c0d818",...ex});
+    const bigBtn= (grad,ex={}) => ({width:"100%",padding:"16px",borderRadius:18,border:"none",color:"#fff",fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:15,cursor:"pointer",background:grad,boxShadow:`0 6px 20px #f0b0c860`,...ex});
+    const inputS= {width:"100%",padding:"14px 16px",borderRadius:14,fontSize:15,border:`1.5px solid ${C.border}`,fontFamily:"'Nunito',sans-serif",fontWeight:700,color:C.text,background:C.bg,boxSizing:"border-box",outline:"none"};
+    const pillBtn=(active,val,set,label,col=C.pink,colD=C.pinkD)=>(
+      <button key={val} onClick={()=>set(val)} style={{flex:1,padding:"11px 4px",borderRadius:50,border:`2px solid ${active?colD:C.border}`,background:active?col:C.card,color:active?C.text:C.sub,fontSize:12,fontFamily:"'Nunito',sans-serif",fontWeight:active?800:600,cursor:"pointer",transition:"all 0.15s",transform:active?"scale(1.04)":"scale(1)",boxShadow:active?`0 4px 12px ${col}99`:"none"}}>{label}</button>
+    );
+
+    // ── AuthScreen ────────────────────────────────────────────────────
+    function AuthScreen({onLogin}){
+      const [mode,  setMode]  = useState("login");
+      const [user,  setUser]  = useState("");
+      const [pw,    setPw]    = useState("");
+      const [pw2,   setPw2]   = useState("");
+      const [err,   setErr]   = useState("");
+      const [busy,  setBusy]  = useState(false);
+      const [show,  setShow]  = useState(false);
+
+      const reset = () => { setErr(""); };
+
+      const doRegister = async () => {
+        const u = user.trim();
+        if(u.length < 2)  return setErr("ユーザー名は2文字以上にしてね");
+        if(pw.length < 4) return setErr("パスワードは4文字以上にしてね");
+        if(pw !== pw2)    return setErr("パスワードが一致しないよ");
+        setBusy(true); setErr("");
+        try {
+          const existing = await stGet(authKey(u), true);
+          if(existing){ setBusy(false); return setErr("そのユーザー名はすでに使われているよ"); }
+          const h = await hashPw(pw);
+          const saved = await stSet(authKey(u), h, true);
+          if(!saved){ setBusy(false); return setErr("保存に失敗したよ。もう一度試してね"); }
+          await stSet(SESSION_KEY, u, false);
+          onLogin(u);
+        } catch(e) {
+          setBusy(false); setErr("エラー: " + e.message);
+        }
+      };
+
+      const doLogin = async () => {
+        const u = user.trim();
+        if(!u || !pw) return setErr("ユーザー名とパスワードを入力してね");
+        setBusy(true); setErr("");
+        try {
+          const stored = await stGet(authKey(u), true);
+          if(!stored){ setBusy(false); return setErr("ユーザーが見つからないよ（まだ登録してない場合は「新規登録」へ）"); }
+          const h = await hashPw(pw);
+          if(h !== stored){ setBusy(false); return setErr("パスワードが違うよ"); }
+          await stSet(SESSION_KEY, u, false);
+          onLogin(u);
+        } catch(e) {
+          setBusy(false); setErr("エラー: " + e.message);
+        }
+      };
+
+      return(
+        <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",maxWidth:420,margin:"0 auto"}}>
+          <div style={{fontSize:56,marginBottom:6}}>🌸</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:28,color:C.text,marginBottom:2}}>SleepCoach</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontSize:13,color:C.sub,marginBottom:28}}>あなた専用の睡眠コーチ</div>
+
+          <div style={{width:"100%",...card({marginBottom:16})}}>
+            <div style={{display:"flex",gap:6,marginBottom:22,background:C.bg,borderRadius:14,padding:4}}>
+              {[["login","ログイン"],["register","新規登録"]].map(([m,l])=>(
+                <button key={m} onClick={()=>{setMode(m);reset();}} style={{flex:1,padding:"10px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:13,background:mode===m?`linear-gradient(135deg,${C.pink},${C.lav})`:"transparent",color:mode===m?"#fff":C.sub,transition:"all 0.2s"}}>{l}</button>
+              ))}
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,marginBottom:6}}>ユーザー名</div>
+              <input style={inputS} placeholder="例: taro123" value={user} onChange={e=>{setUser(e.target.value);reset();}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?doLogin():null)}/>
+            </div>
+
+            <div style={{marginBottom:mode==="register"?14:0}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,marginBottom:6}}>パスワード</div>
+              <div style={{position:"relative"}}>
+                <input style={{...inputS,paddingRight:48}} placeholder="4文字以上" type={show?"text":"password"} value={pw} onChange={e=>{setPw(e.target.value);reset();}} onKeyDown={e=>e.key==="Enter"&&(mode==="login"?doLogin():null)}/>
+                <button onClick={()=>setShow(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.sub}}>{show?"🙈":"👁️"}</button>
+              </div>
+            </div>
+
+            {mode==="register"&&(
+              <div>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,marginBottom:6}}>パスワード（確認）</div>
+                <input style={inputS} placeholder="もう一度入力" type={show?"text":"password"} value={pw2} onChange={e=>{setPw2(e.target.value);reset();}} onKeyDown={e=>e.key==="Enter"&&doRegister()}/>
+              </div>
+            )}
+
+            {err&&<div style={{marginTop:12,background:"#fff0f0",border:"1.5px solid #ffb3b3",borderRadius:12,padding:"10px 14px",fontFamily:"'Nunito',sans-serif",fontSize:13,color:"#cc4444",fontWeight:700}}>{err}</div>}
+
+            <button onClick={mode==="login"?doLogin:doRegister} disabled={busy} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),marginTop:16,opacity:busy?0.6:1}}>
+              {busy?"処理中…":mode==="login"?"ログイン 🌙":"アカウント作成 ✨"}
+            </button>
+          </div>
+
+          <div style={{fontFamily:"'Nunito',sans-serif",fontSize:11,color:C.sub,textAlign:"center",lineHeight:1.8}}>
+            ✅ 一度ログインすると次回から自動ログイン<br/>
+            ✅ 複数デバイスで同じデータにアクセスできます
+          </div>
+        </div>
+      );
+    }
+
+    // ── ScoreRow ──────────────────────────────────────────────────────
+    function ScoreRow({label,value,set,opts}){
+      return(
+        <div style={{marginBottom:18}}>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:13,color:C.sub,marginBottom:8}}>{label}</div>
+          <div style={{display:"flex",gap:7}}>
+            {opts.map((o,i)=>(
+              <button key={i} onClick={()=>set(i+1)} style={{flex:1,height:48,borderRadius:14,border:`2px solid ${value===i+1?C.lavD:C.border}`,background:value===i+1?C.lav:C.card,fontSize:20,cursor:"pointer",transition:"all 0.15s",transform:value===i+1?"scale(1.12)":"scale(1)",boxShadow:value===i+1?`0 4px 12px ${C.lav}99`:"none"}}>{o}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── HomeScreen ────────────────────────────────────────────────────
+    function HomeScreen({records,goLog,userName,onLogout}){
+      const last=records[records.length-1];
+      const avgSleep=records.length?(records.reduce((a,r)=>a+(r.sleepHours||0),0)/records.length).toFixed(1):null;
+      const insight=(()=>{
+        if(records.length<3) return "3日分記録するとあなた専用の分析がスタート ✨";
+        const byH={};
+        records.filter(r=>r.sleepHours&&r.focus).forEach(r=>{const h=Math.round(r.sleepHours);if(!byH[h])byH[h]=[];byH[h].push(r.focus);});
+        const best=Object.entries(byH).filter(([,v])=>v.length>=2).sort(([,a],[,b])=>(b.reduce((s,x)=>s+x,0)/b.length)-(a.reduce((s,x)=>s+x,0)/a.length))[0];
+        if(best) return `${best[0]}時間睡眠の日に集中力が一番高い傾向があるよ ⚡`;
+        return `平均睡眠は ${avgSleep}時間だよ 🌙`;
+      })();
+      const sleepType=(()=>{
+        if(records.length<5) return null;
+        const avg=parseFloat(avgSleep);
+        if(avg<=6) return {label:"ショートスリーパー型",color:C.pink,emoji:"⚡"};
+        if(avg>=8) return {label:"ロングスリーパー型",color:C.sky,emoji:"🐨"};
+        const bts=records.map(r=>parseInt(r.bedTime)).filter(Boolean);
+        if(bts.length>1&&Math.max(...bts)-Math.min(...bts)>=3) return {label:"リズム崩れ型",color:C.peach,emoji:"🌀"};
+        return {label:"バランス型",color:C.mint,emoji:"🌿"};
+      })();
+      return(
+        <div>
+          <div style={{textAlign:"center",padding:"24px 0 16px"}}>
+            <div style={{fontSize:48,marginBottom:4}}>🌸</div>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:26,color:C.text}}>おはよう、{userName}！</div>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontSize:12,color:C.sub,marginTop:2}}>{new Date().toLocaleDateString("ja-JP",{month:"long",day:"numeric",weekday:"short"})}</div>
+          </div>
+
+          {last?(
+            <div style={{...card(),background:`linear-gradient(135deg,${C.pinkLight},${C.lavLight})`,border:`1.5px solid ${C.pink}`}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.pinkD,letterSpacing:2,marginBottom:10}}>LAST NIGHT 🌙</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:44,color:C.text}}>{Math.floor(last.sleepHours)}</span>
+                  <span style={{color:C.sub,marginLeft:2,fontSize:14}}>時間</span>
+                  {Math.round((last.sleepHours%1)*60)>0&&<>
+                    <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:30,color:C.text,marginLeft:4}}>{Math.round((last.sleepHours%1)*60)}</span>
+                    <span style={{color:C.sub,fontSize:14}}>分</span>
+                  </>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:C.sub,fontSize:13}}>{last.bedTime} → {last.wakeTime}</div>
+                  {last.focus&&<div style={{fontSize:22,marginTop:4}}>{"😵😐🧠🧠⚡"[last.focus-1]} {"😔😐😊😊🥳"[last.mood-1]}</div>}
+                  {last.bath&&last.bath!=="none"&&<div style={{fontSize:11,color:C.sub,marginTop:4}}>🛁 {BATH_LABEL[last.bath]}</div>}
+                </div>
+              </div>
+            </div>
+          ):(
+            <div style={{...card(),textAlign:"center",padding:28,background:`linear-gradient(135deg,${C.pinkLight},${C.lavLight})`,border:`1.5px solid ${C.pink}`}}>
+              <div style={{fontSize:32,marginBottom:8}}>✨</div>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:700,color:C.sub,fontSize:14}}>最初の記録をつけよう！</div>
+            </div>
+          )}
+
+          <div style={{...card(),background:`linear-gradient(135deg,${C.lavLight},${C.pinkLight})`,border:`1.5px solid ${C.lav}`}}>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.lavD,letterSpacing:2,marginBottom:8}}>AI インサイト 🔮</div>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontSize:14,color:C.text,lineHeight:1.7}}>{insight}</div>
+          </div>
+
+          {sleepType&&(
+            <div style={{...card(),background:sleepType.color+"28",border:`1.5px solid ${sleepType.color}`}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.sub,letterSpacing:2,marginBottom:4}}>あなたのタイプ</div>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:20,color:C.text}}>{sleepType.emoji} {sleepType.label}</div>
+            </div>
+          )}
+
+          <button onClick={goLog} style={bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`,{marginTop:0})}>＋ 睡眠を記録する 🌙</button>
+
+          <div style={{...card({marginTop:14,marginBottom:0}),padding:14}}>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.sub,letterSpacing:1,marginBottom:10}}>💾 データのバックアップ</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{
+                const data={userName,records,auth:localStorage.getItem(authKey(userName))};
+                const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+                const a=document.createElement("a");
+                a.href=URL.createObjectURL(blob);
+                a.download=`sleepcoach_${userName}_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+              }} style={{flex:1,padding:"11px 6px",borderRadius:14,border:`1.5px solid ${C.mint}`,background:`${C.mint}33`,color:C.text,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,cursor:"pointer"}}>
+                📥 書き出す
+              </button>
+              <label style={{flex:1,padding:"11px 6px",borderRadius:14,border:`1.5px solid ${C.lav}`,background:`${C.lav}33`,color:C.text,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,cursor:"pointer",textAlign:"center",display:"block"}}>
+                📤 読み込む
+                <input type="file" accept=".json" style={{display:"none"}} onChange={async e=>{
+                  const file=e.target.files[0]; if(!file) return;
+                  try{
+                    const text=await file.text();
+                    const data=JSON.parse(text);
+                    if(!data.userName||!Array.isArray(data.records)) return alert("無効なファイルです");
+                    if(data.auth) localStorage.setItem(authKey(data.userName),data.auth);
+                    await stSet(recKey(data.userName),JSON.stringify(data.records),true);
+                    await stSet(SESSION_KEY,data.userName,false);
+                    alert(`「${data.userName}」のデータを読み込んだよ！再読み込みします 🌸`);
+                    location.reload();
+                  }catch(err){ alert("ファイルの読み込みに失敗したよ"); }
+                  e.target.value="";
+                }}/>
+              </label>
+            </div>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:C.sub,marginTop:8,lineHeight:1.6}}>
+              📥 書き出す：データをJSONファイルで保存<br/>
+              📤 読み込む：バックアップファイルから復元
+            </div>
+          </div>
+
+          <button onClick={onLogout} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.border}`,background:"transparent",color:C.sub,fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",marginTop:10}}>ログアウト</button>
+        </div>
+      );
+    }
+
+    // ── LogScreen ─────────────────────────────────────────────────────
+    function LogScreen({records,setRecords,userName,goHome}){
+      const [stepN,setStepN]=useState(0);
+      const [bedH,setBedH]=useState(23);const [bedM,setBedM]=useState(0);
+      const [wakeH,setWakeH]=useState(7);const [wakeM,setWakeM]=useState(0);
+      const [drowsy,setDrowsy]=useState(null);
+      const [focus,setFocus]  =useState(null);
+      const [mood,setMood]    =useState(null);
+      const [caffeine,setCaffeine]=useState(null);
+      const [phone,setPhone]     =useState(null);
+      const [exercise,setExercise]=useState(null);
+      const [bath,setBath]       =useState(null);
+      const [saving,setSaving]   =useState(false);
+      const [done,setDone]       =useState(false);
+
+      const bedTime=fmt(bedH,bedM), wakeTime=fmt(wakeH,wakeM);
+      const sleepHours=diffH(bedTime,wakeTime), sleepHM=diffHM(bedTime,wakeTime);
+
+      const submit=async()=>{
+        setSaving(true);
+        const entry={date:todayStr(),bedTime,wakeTime,sleepHours,drowsy,focus,mood,caffeine,phone,exercise,bath};
+        const updated=[...records.filter(r=>r.date!==todayStr()),entry];
+        await stSet(recKey(userName), JSON.stringify(updated), true);
+        setRecords(updated);
+        setSaving(false); setDone(true);
+      };
+
+      if(done) return(
+        <div style={{textAlign:"center",padding:"60px 0"}}>
+          <div style={{fontSize:72,marginBottom:8}}>🌟</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:26,color:C.text,marginBottom:8}}>記録完了！</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",color:C.sub,fontSize:14,marginBottom:28}}>{fmtSleep(sleepHM)}の睡眠を記録したよ 🌙</div>
+          <button onClick={goHome} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),width:"auto",padding:"14px 36px"}}>ホームへ 🏠</button>
+        </div>
+      );
+
+      const arrBtn={background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.pinkD,padding:"6px 12px",lineHeight:1};
+      const numBox={fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:40,color:C.text,background:C.bg,borderRadius:14,padding:"8px 12px",border:`2px solid ${C.border}`,minWidth:62,textAlign:"center"};
+      const TW=({label,h,setH,m,setM})=>(
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,marginBottom:10}}>{label}</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <button onClick={()=>setH(h=>(h+1)%24)} style={arrBtn}>▲</button>
+              <div style={numBox}>{String(h).padStart(2,"0")}</div>
+              <button onClick={()=>setH(h=>(h-1+24)%24)} style={arrBtn}>▼</button>
+            </div>
+            <div style={{color:C.pinkD,fontSize:28,fontWeight:900,paddingBottom:6}}>:</div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <button onClick={()=>setM(m=>(m+5)%60)} style={arrBtn}>▲</button>
+              <div style={numBox}>{String(m).padStart(2,"0")}</div>
+              <button onClick={()=>setM(m=>(m-5+60)%60)} style={arrBtn}>▼</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      const steps=[
+        {
+          title:"就寝・起床時間 🌙",
+          content:(
+            <div>
+              <div style={{display:"flex",gap:16,marginBottom:20}}>
+                <TW label="就寝" h={bedH} setH={setBedH} m={bedM} setM={setBedM}/>
+                <TW label="起床" h={wakeH} setH={setWakeH} m={wakeM} setM={setWakeM}/>
+              </div>
+              <div style={{textAlign:"center",background:`linear-gradient(135deg,${C.pink}33,${C.lav}33)`,borderRadius:16,padding:14,border:`1.5px solid ${C.border}`}}>
+                <span style={{fontFamily:"'Nunito',sans-serif",color:C.sub,fontSize:13}}>睡眠時間 </span>
+                <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:26,color:C.text}}>{fmtSleep(sleepHM)}</span>
+              </div>
+            </div>
+          ),next:()=>setStepN(1),
+        },
+        {
+          title:"今朝の体調 ☀️",
+          content:(
+            <div>
+              <ScoreRow label="😴 眠気（低→高）" value={drowsy} set={setDrowsy} opts={["😴","😪","😑","🙂","😊"]}/>
+              <ScoreRow label="⚡ 集中力（低→高）" value={focus}  set={setFocus}  opts={["💀","😵","😐","🧠","⚡️"]}/>
+              <ScoreRow label="🌸 気分（低→高）"  value={mood}   set={setMood}   opts={["😭","😔","😐","😊","🥳"]}/>
+            </div>
+          ),next:()=>setStepN(2),disabled:!drowsy||!focus||!mood,
+        },
+        {
+          title:"昨日の生活 🌿",
+          content:(
+            <div>
+              <div style={{marginBottom:16}}>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:13,color:C.sub,marginBottom:8}}>☕ カフェイン</div>
+                <div style={{display:"flex",gap:8}}>{[{v:"none",l:"なし"},{v:"morning",l:"午前のみ"},{v:"evening",l:"夕方以降も"}].map(o=>pillBtn(caffeine===o.v,o.v,setCaffeine,o.l))}</div>
+              </div>
+              <div style={{marginBottom:16}}>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:13,color:C.sub,marginBottom:8}}>📱 寝る前スマホ</div>
+                <div style={{display:"flex",gap:8}}>{[{v:"none",l:"なし"},{v:"short",l:"30分未満"},{v:"long",l:"30分以上"}].map(o=>pillBtn(phone===o.v,o.v,setPhone,o.l,C.lav,C.lavD))}</div>
+              </div>
+              <div>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:13,color:C.sub,marginBottom:8}}>🏃 運動</div>
+                <div style={{display:"flex",gap:8}}>{[{v:"none",l:"なし"},{v:"light",l:"軽め"},{v:"hard",l:"がっつり"}].map(o=>pillBtn(exercise===o.v,o.v,setExercise,o.l,C.mint,C.mintD))}</div>
+              </div>
+            </div>
+          ),next:()=>setStepN(3),disabled:!caffeine||!phone||!exercise,
+        },
+        {
+          title:"お風呂 🛁",
+          content:(
+            <div>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontSize:13,color:C.sub,lineHeight:1.7,marginBottom:16,background:`${C.sky}44`,borderRadius:14,padding:12,border:`1.5px solid ${C.sky}`}}>
+                就寝の何時間前に入った？朝風呂派も選べるよ 🌡️<br/>
+                <span style={{fontSize:11}}>入浴タイミングが睡眠の質に影響するよ</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {BATH_OPTIONS.map(o=>(
+                  <button key={o.v} onClick={()=>setBath(o.v)} style={{padding:"12px 6px",borderRadius:50,border:`2px solid ${bath===o.v?C.lavD:C.border}`,background:bath===o.v?C.lav:C.card,color:bath===o.v?C.text:C.sub,fontSize:13,fontFamily:"'Nunito',sans-serif",fontWeight:bath===o.v?800:600,cursor:"pointer",transition:"all 0.15s",transform:bath===o.v?"scale(1.04)":"scale(1)",boxShadow:bath===o.v?`0 4px 12px ${C.lav}99`:"none"}}>{o.label}</button>
+                ))}
+              </div>
+            </div>
+          ),next:submit,disabled:!bath||saving,lastStep:true,
+        },
+      ];
+
+      const s=steps[stepN];
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:20,color:C.text}}>{s.title}</div>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontSize:12,color:C.sub,fontWeight:700}}>{stepN+1}/4</div>
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:22}}>
+            {[0,1,2,3].map(i=><div key={i} style={{height:6,flex:1,borderRadius:6,background:i<stepN?C.mintD:i===stepN?C.pinkD:C.border,transition:"all 0.3s"}}/>)}
+          </div>
+          {s.content}
+          <button onClick={s.next} disabled={s.disabled} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),marginTop:16,opacity:s.disabled?0.4:1,cursor:s.disabled?"not-allowed":"pointer"}}>
+            {saving?"保存中…":s.lastStep?"記録する ✓":"次へ →"}
+          </button>
+        </div>
+      );
+    }
+
+    // ── StatsScreen ───────────────────────────────────────────────────
+    function StatsScreen({records}){
+      const week=records.slice(-7);
+      const maxH=week.length?Math.max(...week.map(r=>r.sleepHours||0),9):9;
+      const avgRaw=records.length?(records.reduce((a,r)=>a+(r.sleepHours||0),0)/records.length):0;
+      const avgFocus=records.filter(r=>r.focus).length?(records.filter(r=>r.focus).reduce((a,r)=>a+r.focus,0)/records.filter(r=>r.focus).length).toFixed(1):"-";
+      const avgDisplay=(()=>{const h=Math.floor(avgRaw),m=Math.round((avgRaw-h)*60);return m>0?`${h}時間${m}分`:`${h}時間`;})();
+
+      const insights=(()=>{
+        if(records.length<3) return [];
+        const tips=[];
+        const grp=(key,val,metric)=>{const a=records.filter(r=>r[key]===val&&r[metric]),b=records.filter(r=>r[key]!==val&&r[metric]);return[a.length?a.reduce((s,r)=>s+r[metric],0)/a.length:null,b.length?b.reduce((s,r)=>s+r[metric],0)/b.length:null];};
+        const[pL,pN]=grp("phone","long","focus");
+        if(pL&&pN&&pN-pL>=0.5) tips.push(`📱 寝る前スマホを控えた日の集中力が ${(pN-pL).toFixed(1)}pt 高い`);
+        const[cE,cN]=grp("caffeine","evening","sleepHours");
+        if(cE&&cN&&cN-cE>=0.3) tips.push(`☕ 夕方以降カフェインなしの日は平均 ${(cN-cE).toFixed(1)}h 長く眠れている`);
+        const byH={};
+        records.filter(r=>r.sleepHours&&r.focus).forEach(r=>{const h=Math.round(r.sleepHours);if(!byH[h])byH[h]=[];byH[h].push(r.focus);});
+        const bestH=Object.entries(byH).filter(([,v])=>v.length>=2).sort(([,a],[,b])=>(b.reduce((s,x)=>s+x,0)/b.length)-(a.reduce((s,x)=>s+x,0)/a.length))[0];
+        if(bestH) tips.push(`⚡ ${bestH[0]}時間睡眠の日に集中力が最も高い傾向`);
+        const bathG={};
+        records.filter(r=>r.bath&&r.bath!=="none"&&r.sleepHours).forEach(r=>{if(!bathG[r.bath])bathG[r.bath]=[];bathG[r.bath].push(r.sleepHours);});
+        const bathE=Object.entries(bathG).filter(([,v])=>v.length>=2).sort(([,a],[,b])=>(b.reduce((s,x)=>s+x,0)/b.length)-(a.reduce((s,x)=>s+x,0)/a.length));
+        if(bathE.length>=2){const[bb,bv]=bathE[0],[,wv]=bathE[bathE.length-1];const ba=(bv.reduce((s,x)=>s+x,0)/bv.length).toFixed(1),wa=(wv.reduce((s,x)=>s+x,0)/wv.length).toFixed(1);if(parseFloat(ba)-parseFloat(wa)>=0.3)tips.push(`🛁 ${BATH_LABEL[bb]}の日の睡眠が平均${ba}hで最長！`);}
+        return tips;
+      })();
+
+      return(
+        <div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:24,color:C.text,marginBottom:18}}>統計 & インサイト 📊</div>
+          <div style={{display:"flex",gap:10,marginBottom:16}}>
+            {[{label:"平均睡眠",val:avgDisplay,c:C.pink},{label:"平均集中力",val:`${avgFocus}/5`,c:C.lav},{label:"記録日数",val:`${records.length}日`,c:C.mint}].map(s=>(
+              <div key={s.label} style={{flex:1,...card({padding:12,marginBottom:0}),textAlign:"center",border:`1.5px solid ${s.c}`}}>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:16,color:C.text}}>{s.val}</div>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:C.sub,marginTop:2,fontWeight:700}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={card()}>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,letterSpacing:1,marginBottom:16}}>直近7日間の睡眠 🌙</div>
+            {week.length===0?(
+              <div style={{color:C.sub,textAlign:"center",padding:"20px 0",fontSize:13}}>まだデータがないよ 🌱</div>
+            ):(
+              <div style={{display:"flex",alignItems:"flex-end",gap:6,height:110}}>
+                {week.map((r,i)=>{const pct=(r.sleepHours||0)/maxH,col=r.sleepHours>=7?C.mintD:r.sleepHours>=6?"#fbbf24":C.pinkD;return(
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                    <div style={{fontFamily:"'Nunito',sans-serif",fontSize:9,fontWeight:800,color:col}}>{Math.floor(r.sleepHours)}h{Math.round((r.sleepHours%1)*60)>0?`${Math.round((r.sleepHours%1)*60)}m`:""}</div>
+                    <div style={{width:"100%",borderRadius:8,background:col,height:`${pct*85}px`,minHeight:4,transition:"height 0.6s",boxShadow:`0 2px 8px ${col}66`}}/>
+                    <div style={{fontFamily:"'Nunito',sans-serif",fontSize:8,color:C.sub,fontWeight:700}}>{r.date.slice(5).replace("-","/")}</div>
+                  </div>
+                );})}
+              </div>
+            )}
+          </div>
+          {insights.length>0&&(
+            <div style={{...card(),background:`linear-gradient(135deg,${C.lavLight},${C.pinkLight})`,border:`1.5px solid ${C.lav}`}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.lavD,letterSpacing:1,marginBottom:12}}>あなた専用インサイト ✨</div>
+              {insights.map((t,i)=>(
+                <div key={i} style={{fontFamily:"'Nunito',sans-serif",color:C.text,fontSize:13,lineHeight:1.7,padding:"8px 0",borderBottom:i<insights.length-1?`1px solid ${C.border}`:"none"}}>{t}</div>
+              ))}
+            </div>
+          )}
+          {records.length<3&&<div style={{textAlign:"center",fontFamily:"'Nunito',sans-serif",fontSize:12,color:C.sub,marginTop:8}}>あと{3-records.length}日分でインサイト解放 🔮</div>}
+        </div>
+      );
+    }
+
+    // ── MissionsScreen ────────────────────────────────────────────────
+    function MissionsScreen({records}){
+      const ms=[
+        {id:"m1",label:"3日連続 23時台就寝",emoji:"🌙",check:()=>{const l=records.slice(-3);return l.length===3&&l.every(r=>parseInt(r.bedTime)===23);}},
+        {id:"m2",label:"夕方以降カフェインなし × 3日",emoji:"☕",check:()=>records.filter(r=>r.caffeine!=="evening").length>=3},
+        {id:"m3",label:"寝る前スマホなし × 3日",emoji:"📵",check:()=>records.filter(r=>r.phone==="none").length>=3},
+        {id:"m4",label:"7時間以上睡眠を5日達成",emoji:"⭐",check:()=>records.filter(r=>r.sleepHours>=7).length>=5},
+        {id:"m5",label:"7日連続記録！",emoji:"📒",check:()=>records.length>=7},
+        {id:"m6",label:"入浴チャレンジ × 3日（1〜2h前）",emoji:"🛁",check:()=>records.filter(r=>["w1h","w90","w2h"].includes(r.bath)).length>=3},
+      ];
+      return(
+        <div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:24,color:C.text,marginBottom:4}}>ミッション 🎯</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontSize:13,color:C.sub,marginBottom:20}}>続けて睡眠を改善しよう！</div>
+          {ms.map(m=>{const done=m.check();return(
+            <div key={m.id} style={{...card({marginBottom:10}),background:done?`linear-gradient(135deg,${C.pinkLight},${C.lavLight})`:C.card,border:done?`1.5px solid ${C.pinkD}`:`1.5px solid ${C.border}`,display:"flex",alignItems:"center",gap:14}}>
+              <div style={{fontSize:28}}>{m.emoji}</div>
+              <div style={{flex:1,fontFamily:"'Nunito',sans-serif",fontWeight:700,color:done?C.text:C.sub,fontSize:13,lineHeight:1.4}}>{m.label}</div>
+              <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,background:done?`linear-gradient(135deg,${C.pink},${C.lav})`:"transparent",border:done?"none":`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:14,fontWeight:900,boxShadow:done?`0 4px 10px ${C.pink}66`:"none"}}>{done?"✓":""}</div>
+            </div>
+          );})}
+        </div>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────────────
+    function App(){
+      const [userName, setUserName] = useState(null);
+      const [records,  setRecords]  = useState([]);
+      const [screen,   setScreen]   = useState("home");
+      const [booting,  setBooting]  = useState(true);
+
+      useEffect(()=>{
+        (async()=>{
+          const saved=await stGet(SESSION_KEY, false);
+          if(saved){
+            const raws=await stGet(recKey(saved), true);
+            setUserName(saved);
+            setRecords(raws?JSON.parse(raws):[]);
+          }
+          setBooting(false);
+        })();
+      },[]);
+
+      const handleLogin=async(u)=>{
+        const raws=await stGet(recKey(u), true);
+        setRecords(raws?JSON.parse(raws):[]);
+        setUserName(u);
+        setScreen("home");
+      };
+
+      const handleLogout=async()=>{
+        await stSet(SESSION_KEY,"",false);
+        setUserName(null); setRecords([]); setScreen("home");
+      };
+
+      const nav=[{id:"home",label:"ホーム",icon:"🏠"},{id:"log",label:"記録",icon:"✏️"},{id:"stats",label:"統計",icon:"📊"},{id:"missions",label:"ミッション",icon:"🎯"}];
+
+      if(booting) return(
+        <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <div style={{fontSize:48}}>🌸</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,color:C.sub,fontSize:14}}>読み込み中…</div>
+        </div>
+      );
+
+      if(!userName) return <AuthScreen onLogin={handleLogin}/>;
+
+      return(
+        <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",maxWidth:420,margin:"0 auto",fontFamily:"'Nunito',sans-serif"}}>
+          <div style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:"rgba(255,249,245,0.93)",backdropFilter:"blur(16px)",borderBottom:`1.5px solid ${C.border}`,padding:"13px 20px 10px",zIndex:100,boxSizing:"border-box"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{fontSize:22}}>🌸</div>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:20,color:C.text}}>SleepCoach</div>
+              <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
+                <div style={{background:`${C.lav}55`,borderRadius:50,padding:"3px 10px",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.lavD}}>👤 {userName}</div>
+                <div style={{background:`${C.pink}44`,borderRadius:50,padding:"3px 10px",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:C.pinkD}}>{records.length}日</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{flex:1,padding:"74px 18px 86px",overflowY:"auto"}}>
+            {screen==="home"     && <HomeScreen records={records} goLog={()=>setScreen("log")} userName={userName} onLogout={handleLogout}/>}
+            {screen==="log"      && <LogScreen  records={records} setRecords={setRecords} userName={userName} goHome={()=>setScreen("home")}/>}
+            {screen==="stats"    && <StatsScreen records={records}/>}
+            {screen==="missions" && <MissionsScreen records={records}/>}
+          </div>
+
+          <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:"rgba(255,249,245,0.96)",backdropFilter:"blur(16px)",borderTop:`1.5px solid ${C.border}`,display:"flex",padding:"8px 0 18px",zIndex:100,boxSizing:"border-box"}}>
+            {nav.map(n=>{const active=screen===n.id;return(
+              <button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 0"}}>
+                <div style={{fontSize:20,filter:active?"none":"grayscale(1) opacity(0.3)",transition:"filter 0.2s"}}>{n.icon}</div>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:9,color:active?C.pinkD:C.sub}}>{n.label}</div>
+                {active&&<div style={{width:18,height:3,borderRadius:2,background:`linear-gradient(90deg,${C.pink},${C.lav})`,marginTop:1}}/>}
+              </button>
+            );})}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+
+  <script>
+    // Service Worker 登録（PWA対応）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(() => console.log('SW registered'))
+          .catch(e => console.log('SW error', e));
+      });
+    }
+  </script>
+</body>
+</html>
