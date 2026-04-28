@@ -335,9 +335,111 @@
       );
     }
 
+    // ── CalendarScreen ────────────────────────────────────────────────
+    function CalendarScreen({records,goLog,setLogDate}){
+      const [year,  setYear]  = useState(new Date().getFullYear());
+      const [month, setMonth] = useState(new Date().getMonth());
+      const [detail,setDetail]= useState(null);
+
+      const recMap = Object.fromEntries(records.map(r=>[r.date,r]));
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month+1, 0).getDate();
+      const today = todayStr();
+
+      const prevMonth=()=>{ if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); setDetail(null); };
+      const nextMonth=()=>{ if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); setDetail(null); };
+
+      const sleepColor=(h)=> h>=7?C.mintD:h>=6?"#fbbf24":h>0?C.pinkD:null;
+
+      return(
+        <div>
+          <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:24,color:C.text,marginBottom:16}}>カレンダー 📅</div>
+
+          {/* 月ナビ */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,...card({padding:"10px 14px",marginBottom:16})}}>
+            <button onClick={prevMonth} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.pinkD}}>‹</button>
+            <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:17,color:C.text}}>{year}年 {month+1}月</div>
+            <button onClick={nextMonth} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:C.pinkD}}>›</button>
+          </div>
+
+          {/* 曜日ヘッダー */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+            {["日","月","火","水","木","金","土"].map((d,i)=>(
+              <div key={d} style={{textAlign:"center",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:i===0?"#f87171":i===6?"#60a5fa":C.sub,paddingBottom:4}}>{d}</div>
+            ))}
+          </div>
+
+          {/* 日付グリッド */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+            {Array(firstDay).fill(null).map((_,i)=><div key={"e"+i}/>)}
+            {Array(daysInMonth).fill(null).map((_,i)=>{
+              const d=i+1;
+              const dateStr=`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+              const rec=recMap[dateStr];
+              const col=rec?sleepColor(rec.sleepHours):null;
+              const isToday=dateStr===today;
+              const isSelected=detail?.date===dateStr;
+              return(
+                <button key={d} onClick={()=>setDetail(rec?{...rec,date:dateStr}:{date:dateStr})}
+                  style={{aspectRatio:"1",borderRadius:10,border:isSelected?`2px solid ${C.pinkD}`:isToday?`2px solid ${C.lav}`:"2px solid transparent",background:col?col+"33":isToday?C.lavLight:C.card,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2}}>
+                  <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:isToday?900:700,fontSize:13,color:isToday?C.lavD:C.text}}>{d}</div>
+                  {rec&&<div style={{width:6,height:6,borderRadius:"50%",background:col}}/>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 凡例 */}
+          <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"center"}}>
+            {[[C.mintD,"7h以上"],[C.pinkD,"6h未満"],["#fbbf24","6〜7h"]].map(([c,l])=>(
+              <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:c}}/>
+                <span style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:C.sub}}>{l}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 詳細パネル */}
+          {detail&&(
+            <div style={{...card({marginTop:14}),background:`linear-gradient(135deg,${C.pinkLight},${C.lavLight})`,border:`1.5px solid ${C.pink}`}}>
+              <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:14,color:C.text,marginBottom:10}}>
+                {detail.date.replace(/-/g,"/")} の記録
+              </div>
+              {detail.bedTime?(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                    <div>
+                      <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:32,color:C.text}}>{Math.floor(detail.sleepHours)}</span>
+                      <span style={{color:C.sub,fontSize:13}}>時間</span>
+                      {Math.round((detail.sleepHours%1)*60)>0&&<>
+                        <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginLeft:4}}>{Math.round((detail.sleepHours%1)*60)}</span>
+                        <span style={{color:C.sub,fontSize:13}}>分</span>
+                      </>}
+                    </div>
+                    <div style={{textAlign:"right",color:C.sub,fontSize:12}}>
+                      <div>{detail.bedTime} → {detail.wakeTime}</div>
+                      {detail.focus&&<div style={{fontSize:18,marginTop:2}}>{"😵😐🧠🧠⚡"[detail.focus-1]} {"😔😐😊😊🥳"[detail.mood-1]}</div>}
+                      {detail.bath&&detail.bath!=="none"&&<div style={{fontSize:11,marginTop:2}}>🛁 {BATH_LABEL[detail.bath]}</div>}
+                    </div>
+                  </div>
+                  <button onClick={()=>{setLogDate(detail.date);goLog();}} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),padding:"10px",fontSize:13}}>✏️ この日を編集</button>
+                </div>
+              ):(
+                <div style={{textAlign:"center",padding:"8px 0"}}>
+                  <div style={{color:C.sub,fontSize:13,marginBottom:10}}>まだ記録がないよ</div>
+                  <button onClick={()=>{setLogDate(detail.date);goLog();}} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),padding:"10px",fontSize:13}}>＋ この日を記録する</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     // ── LogScreen ─────────────────────────────────────────────────────
-    function LogScreen({records,setRecords,userName,goHome}){
+    function LogScreen({records,setRecords,userName,goHome,logDate}){
       const [stepN,setStepN]=useState(0);
+      const [targetDate,setTargetDate]=useState(logDate||todayStr());
       const [bedH,setBedH]=useState(23);const [bedM,setBedM]=useState(0);
       const [wakeH,setWakeH]=useState(7);const [wakeM,setWakeM]=useState(0);
       const [drowsy,setDrowsy]=useState(null);
@@ -350,13 +452,25 @@
       const [saving,setSaving]   =useState(false);
       const [done,setDone]       =useState(false);
 
+      // 既存データがあれば初期値にセット
+      useEffect(()=>{
+        const existing=records.find(r=>r.date===targetDate);
+        if(existing){
+          const[bh,bm]=existing.bedTime.split(":").map(Number);
+          const[wh,wm]=existing.wakeTime.split(":").map(Number);
+          setBedH(bh);setBedM(bm);setWakeH(wh);setWakeM(wm);
+          setDrowsy(existing.drowsy);setFocus(existing.focus);setMood(existing.mood);
+          setCaffeine(existing.caffeine);setPhone(existing.phone);setExercise(existing.exercise);setBath(existing.bath);
+        }
+      },[targetDate]);
+
       const bedTime=fmt(bedH,bedM), wakeTime=fmt(wakeH,wakeM);
       const sleepHours=diffH(bedTime,wakeTime), sleepHM=diffHM(bedTime,wakeTime);
 
       const submit=async()=>{
         setSaving(true);
-        const entry={date:todayStr(),bedTime,wakeTime,sleepHours,drowsy,focus,mood,caffeine,phone,exercise,bath};
-        const updated=[...records.filter(r=>r.date!==todayStr()),entry];
+        const entry={date:targetDate,bedTime,wakeTime,sleepHours,drowsy,focus,mood,caffeine,phone,exercise,bath};
+        const updated=[...records.filter(r=>r.date!==targetDate),entry].sort((a,b)=>a.date>b.date?1:-1);
         await stSet(recKey(userName), JSON.stringify(updated), true);
         setRecords(updated);
         setSaving(false); setDone(true);
@@ -366,6 +480,7 @@
         <div style={{textAlign:"center",padding:"60px 0"}}>
           <div style={{fontSize:72,marginBottom:8}}>🌟</div>
           <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:26,color:C.text,marginBottom:8}}>記録完了！</div>
+          <div style={{fontFamily:"'Nunito',sans-serif",color:C.sub,fontSize:14,marginBottom:4}}>{targetDate.replace(/-/g,"/")}の記録</div>
           <div style={{fontFamily:"'Nunito',sans-serif",color:C.sub,fontSize:14,marginBottom:28}}>{fmtSleep(sleepHM)}の睡眠を記録したよ 🌙</div>
           <button onClick={goHome} style={{...bigBtn(`linear-gradient(135deg,${C.pink},${C.lav})`),width:"auto",padding:"14px 36px"}}>ホームへ 🏠</button>
         </div>
@@ -394,9 +509,15 @@
 
       const steps=[
         {
-          title:"就寝・起床時間 🌙",
+          title:"日付と就寝・起床時間 🌙",
           content:(
             <div>
+              {/* 日付選択 */}
+              <div style={{marginBottom:16}}>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:12,color:C.sub,marginBottom:6}}>📅 記録する日</div>
+                <input type="date" value={targetDate} max={todayStr()} onChange={e=>setTargetDate(e.target.value)}
+                  style={{...inputS,fontSize:14}}/>
+              </div>
               <div style={{display:"flex",gap:16,marginBottom:20}}>
                 <TW label="就寝" h={bedH} setH={setBedH} m={bedM} setM={setBedM}/>
                 <TW label="起床" h={wakeH} setH={setWakeH} m={wakeM} setM={setWakeM}/>
@@ -571,6 +692,7 @@
       const [records,  setRecords]  = useState([]);
       const [screen,   setScreen]   = useState("home");
       const [booting,  setBooting]  = useState(true);
+      const [logDate,  setLogDate]  = useState(null);
 
       useEffect(()=>{
         (async()=>{
@@ -596,7 +718,7 @@
         setUserName(null); setRecords([]); setScreen("home");
       };
 
-      const nav=[{id:"home",label:"ホーム",icon:"🏠"},{id:"log",label:"記録",icon:"✏️"},{id:"stats",label:"統計",icon:"📊"},{id:"missions",label:"ミッション",icon:"🎯"}];
+      const nav=[{id:"home",label:"ホーム",icon:"🏠"},{id:"log",label:"記録",icon:"✏️"},{id:"calendar",label:"カレンダー",icon:"📅"},{id:"stats",label:"統計",icon:"📊"},{id:"missions",label:"ミッション",icon:"🎯"}];
 
       if(booting) return(
         <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
@@ -621,8 +743,9 @@
           </div>
 
           <div style={{flex:1,padding:"74px 18px 86px",overflowY:"auto"}}>
-            {screen==="home"     && <HomeScreen records={records} goLog={()=>setScreen("log")} userName={userName} onLogout={handleLogout}/>}
-            {screen==="log"      && <LogScreen  records={records} setRecords={setRecords} userName={userName} goHome={()=>setScreen("home")}/>}
+            {screen==="home"     && <HomeScreen records={records} goLog={()=>{setLogDate(null);setScreen("log");}} userName={userName} onLogout={handleLogout}/>}
+            {screen==="log"      && <LogScreen  records={records} setRecords={setRecords} userName={userName} goHome={()=>setScreen("home")} logDate={logDate}/>}
+            {screen==="calendar" && <CalendarScreen records={records} goLog={()=>setScreen("log")} setLogDate={setLogDate}/>}
             {screen==="stats"    && <StatsScreen records={records}/>}
             {screen==="missions" && <MissionsScreen records={records}/>}
           </div>
