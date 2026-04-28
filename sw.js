@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sleepcoach-v1';
+const CACHE_NAME = 'sleepcoach-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,13 @@ const ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js'
 ];
+
+// 即座にアクティブ化
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // インストール時にキャッシュ
 self.addEventListener('install', event => {
