@@ -50,6 +50,9 @@
     // ── テーマ定義（22種類） ────────────────────────────────────────
     const THEMES = [
       { id:'default',  name:'桜の夢',      emoji:'🌸', price:0,    bg:'#fff9f5',card:'#ffffff',pink:'#ffb3c6',pinkD:'#ff85a1',pinkLight:'#fff0f5',lav:'#d4b8f0',lavD:'#b896e8',lavLight:'#f5f0ff',mint:'#a8e6cf',mintD:'#5ecb98',peach:'#ffd6b3',sky:'#b3d9ff',text:'#3d2c35',sub:'#9b7f8c',border:'#f0d9e8',icon:'🌸' },
+      { id:'snow',     name:'雪景色',      emoji:'❄️', price:0,   bg:'#f8fbff',card:'#ffffff',pink:'#90caf9',pinkD:'#1565c0',pinkLight:'#e3f2fd',lav:'#b0bec5',lavD:'#546e7a',lavLight:'#eceff1',mint:'#b2ebf2',mintD:'#00838f',peach:'#e1f5fe',sky:'#fafafa',text:'#1a237e',sub:'#546e7a',border:'#cfd8dc',icon:'❄️' },
+      { id:'white',    name:'ピュアホワイト',emoji:'⬜', price:20, bg:'#ffffff',card:'#f8f8f8',pink:'#e0e0e0',pinkD:'#9e9e9e',pinkLight:'#f5f5f5',lav:'#eeeeee',lavD:'#757575',lavLight:'#fafafa',mint:'#e0e0e0',mintD:'#9e9e9e',peach:'#f5f5f5',sky:'#eeeeee',text:'#212121',sub:'#757575',border:'#e0e0e0',icon:'⬜' },
+      { id:'black',    name:'漆黒',        emoji:'⬛', price:30,  bg:'#121212',card:'#1e1e1e',pink:'#444444',pinkD:'#666666',pinkLight:'#2a2a2a',lav:'#333333',lavD:'#555555',lavLight:'#1a1a1a',mint:'#3a3a3a',mintD:'#555555',peach:'#2d2d2d',sky:'#252525',text:'#ffffff',sub:'#aaaaaa',border:'#333333',icon:'⬛' },
       { id:'ocean',    name:'深海ブルー',  emoji:'🌊', price:20,   bg:'#f0f8ff',card:'#ffffff',pink:'#64b5f6',pinkD:'#1976d2',pinkLight:'#e3f2fd',lav:'#90caf9',lavD:'#1565c0',lavLight:'#e8f4fd',mint:'#80deea',mintD:'#00838f',peach:'#b3e5fc',sky:'#e1f5fe',text:'#0d2137',sub:'#546e7a',border:'#b3d9f2',icon:'🌊' },
       { id:'forest',   name:'深森グリーン',emoji:'🌲', price:20,   bg:'#f1f8f1',card:'#ffffff',pink:'#81c784',pinkD:'#388e3c',pinkLight:'#e8f5e9',lav:'#a5d6a7',lavD:'#2e7d32',lavLight:'#f1f8e9',mint:'#c8e6c9',mintD:'#43a047',peach:'#dcedc8',sky:'#f0f4c3',text:'#1b3a1f',sub:'#558b2f',border:'#c8e6c9',icon:'🌲' },
       { id:'night',    name:'夜空の星',    emoji:'🌙', price:30,   bg:'#0d0d1a',card:'#1a1a2e',pink:'#9c88ff',pinkD:'#7c5cbf',pinkLight:'#2d1b69',lav:'#6c63ff',lavD:'#4834d4',lavLight:'#1e1247',mint:'#00d2d3',mintD:'#009faf',peach:'#4834d4',sky:'#1e3799',text:'#e8e8ff',sub:'#8888bb',border:'#2d2d5e',icon:'🌙' },
@@ -69,7 +72,6 @@
       { id:'neon',     name:'ネオン',      emoji:'💫', price:50,   bg:'#050510',card:'#0d0d20',pink:'#ff2d78',pinkD:'#cc0055',pinkLight:'#2d0014',lav:'#7b2fff',lavD:'#5500cc',lavLight:'#150030',mint:'#00fff0',mintD:'#00cccc',peach:'#ff8800',sky:'#000033',text:'#ffffff',sub:'#aaaaff',border:'#2d0055',icon:'💫' },
       { id:'baby',     name:'ベビーピンク', emoji:'👶', price:20,  bg:'#fff5f8',card:'#ffffff',pink:'#ffb6c1',pinkD:'#ff69b4',pinkLight:'#fff0f3',lav:'#ffc0cb',lavD:'#ff1493',lavLight:'#fff5f7',mint:'#ffb6c1',mintD:'#ff69b4',peach:'#ffe4e8',sky:'#fff0f5',text:'#5c2d3e',sub:'#c87070',border:'#ffd6df',icon:'👶' },
       { id:'autumn',   name:'秋の紅葉',    emoji:'🍁', price:30,  bg:'#fdf8f0',card:'#ffffff',pink:'#d2691e',pinkD:'#8b2500',pinkLight:'#fdf0e8',lav:'#cd853f',lavD:'#8b4513',lavLight:'#fef5e4',mint:'#daa520',mintD:'#b8860b',peach:'#f4a460',sky:'#faebd7',text:'#2c1810',sub:'#7b3f00',border:'#deb887',icon:'🍁' },
-      { id:'snow',     name:'雪景色',      emoji:'❄️', price:25,  bg:'#f8fbff',card:'#ffffff',pink:'#90caf9',pinkD:'#1565c0',pinkLight:'#e3f2fd',lav:'#b0bec5',lavD:'#546e7a',lavLight:'#eceff1',mint:'#b2ebf2',mintD:'#00838f',peach:'#e1f5fe',sky:'#fafafa',text:'#1a237e',sub:'#546e7a',border:'#cfd8dc',icon:'❄️' },
       { id:'galaxy',   name:'銀河系',      emoji:'🪐', price:50,  bg:'#08001a',card:'#100028',pink:'#ff6ec7',pinkD:'#cc00aa',pinkLight:'#2a0044',lav:'#845ef7',lavD:'#5f3dc4',lavLight:'#1a0033',mint:'#63e6be',mintD:'#0ca678',peach:'#ff922b',sky:'#000022',text:'#f0d0ff',sub:'#9966cc',border:'#330055',icon:'🪐' },
     ];
 
@@ -85,8 +87,8 @@
       localStorage.setItem(THEME_KEY(userName), themeId);
     }
     function loadOwned(userName) {
-      try { return JSON.parse(localStorage.getItem(OWNED_KEY(userName))||'["default"]'); }
-      catch { return ['default']; }
+      try { return JSON.parse(localStorage.getItem(OWNED_KEY(userName))||'["default","snow"]'); }
+      catch { return ['default','snow']; }
     }
     function saveOwned(userName, owned) {
       localStorage.setItem(OWNED_KEY(userName), JSON.stringify(owned));
@@ -784,26 +786,8 @@
 
     // ── コイン管理 ──────────────────────────────────────────────────
     const COIN_KEY = (u) => `sc-coins:${u.toLowerCase()}`;
-    const COIN_WEEK_KEY = (u) => `sc-coins-week:${u.toLowerCase()}`;
-
-    // 今週の月曜日の日付文字列を取得
-    function getWeekStart() {
-      const d = new Date();
-      const day = d.getDay();
-      const diff = d.getDate() - (day===0?6:day-1);
-      const mon = new Date(d.setDate(diff));
-      return mon.toISOString().slice(0,10);
-    }
 
     function loadCoins(userName) {
-      const weekStart = getWeekStart();
-      const savedWeek = localStorage.getItem(COIN_WEEK_KEY(userName));
-      // 週が変わっていたらリセット
-      if(savedWeek !== weekStart) {
-        localStorage.setItem(COIN_WEEK_KEY(userName), weekStart);
-        localStorage.setItem(COIN_KEY(userName), '0');
-        return 0;
-      }
       return parseInt(localStorage.getItem(COIN_KEY(userName))||'0');
     }
 
@@ -855,19 +839,6 @@
       },[records]);
 
       const completedCount = missions.filter(m=>m.check(records,today)).length;
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate()+1);
-      tomorrow.setHours(0,0,0,0);
-      const diff = tomorrow - now;
-      const hh = Math.floor(diff/3600000);
-      const mm = Math.floor((diff%3600000)/60000);
-
-      // 週リセットまでの日数
-      const weekStart = new Date(getWeekStart());
-      const nextWeek = new Date(weekStart);
-      nextWeek.setDate(nextWeek.getDate()+7);
-      const daysLeft = Math.ceil((nextWeek - new Date()) / 86400000);
 
       return(
         <div>
@@ -877,7 +848,7 @@
           <div style={{...card({marginBottom:12}),background:`linear-gradient(135deg,#fff8e1,#fff3cd)`,border:`1.5px solid #ffd700`,padding:'12px 16px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:'#b8860b',letterSpacing:1,marginBottom:2}}>今週のコイン 🪙</div>
+                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:11,color:'#b8860b',letterSpacing:1,marginBottom:2}}>所持コイン 🪙</div>
                 <div style={{display:'flex',alignItems:'baseline',gap:4}}>
                   <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:36,color:'#b8860b'}}>{coins}</span>
                   <span style={{fontFamily:"'Nunito',sans-serif",fontSize:13,color:'#b8860b'}}>枚</span>
@@ -885,11 +856,10 @@
               </div>
               <div style={{textAlign:'right'}}>
                 <div style={{fontSize:36}}>🪙</div>
-                <div style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:'#b8860b',marginTop:2}}>リセットまで{daysLeft}日</div>
               </div>
             </div>
             <div style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:'#b8860b',marginTop:8,lineHeight:1.6}}>
-              今日+1 · 今週+3 · 今月+10 · 毎週月曜リセット
+              今日+1 · 今週+3 · 今月+10 · 永遠に貯まります！
             </div>
           </div>
 
@@ -899,10 +869,6 @@
               <div>
                 <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:13,color:C.text}}>今日のミッション</div>
                 <div style={{fontFamily:"'Nunito',sans-serif",fontSize:11,color:C.sub,marginTop:2}}>{today.replace(/-/g,'/')} · {completedCount}/5 達成</div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontFamily:"'Nunito',sans-serif",fontSize:10,color:C.sub}}>次の更新まで</div>
-                <div style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:14,color:C.lavD}}>{hh}時間{mm}分</div>
               </div>
             </div>
             <div style={{marginTop:10,background:C.border,borderRadius:10,height:8}}>
