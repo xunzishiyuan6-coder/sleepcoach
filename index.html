@@ -373,6 +373,8 @@
                     </div>
                     <div style={{fontFamily:"'Nunito',sans-serif",fontSize:11,color:C.sub,marginTop:2}}>
                       {r.bed_time}→{r.wake_time} · 集中{r.focus}/5 · 気分{r.mood}/5
+                      {r.bath&&r.bath!=='none'&&<span> · 🛁 {BATH_LABEL[r.bath]}</span>}
+                      {r.bath==='none'&&<span> · 🛁 入らず</span>}
                     </div>
                   </div>
                 ))
